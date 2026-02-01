@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "output": {
+    "dir": "logiclint-out"
+  },
+  "gemini": {
+    "model": "gemini-2.5-flash",
+    "api_key_file": ".logiclint/secret.json",
+    "sleep_seconds_between_requests": 0,
+    "max_retries_per_file": 2,
+    "sleep_seconds_between_retries": 2
+  },
+  "taxonomy": [
+    "definition_consistency",
+    "quantifier_scope_drift",
+    "causal_leap_or_missing_warrant",
+    "premise_conflict",
+    "reference_ambiguity",
+    "temporal_or_stage_inconsistency",
+    "normative_descriptive_mixing"
+  ]
+}
+
