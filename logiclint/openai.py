@@ -23,7 +23,6 @@ def openai_generate_text(*, base_url: str, model: str, prompt: str, api_key: str
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.2,
     }
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
