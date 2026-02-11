@@ -2,6 +2,8 @@
 
 LLM（Gemini API）に「内部整合性の観点」を固定して当て、**JSON（固定スキーマ）**で指摘を返させ、原稿の編集に使うためのツールです。
 
+現在は **Gemini / OpenAI（互換API含む）** のどちらでも実行できます。利用するプロバイダは `.logiclint/logiclint.config.json` の `provider` で切り替えます（未指定時はGemini）。
+
 ### 特徴
 - **rubric固定**: 観点は `logiclint/assets/rubric.md`
 - **スキーマ固定**: 出力形は `logiclint/assets/schema.json`
@@ -17,8 +19,16 @@ LLM（Gemini API）に「内部整合性の観点」を固定して当て、**JS
 
 `.logiclint/secret.json`
 
+#### Gemini
+
 ```json
 { "gemini_api_key": "PASTE_YOUR_KEY_HERE" }
+```
+
+#### OpenAI / OpenAI互換
+
+```json
+{ "openai_api_key": "PASTE_YOUR_KEY_HERE" }
 ```
 
 ### 2) 単発実行（1ファイル）
@@ -50,4 +60,37 @@ pwsh "<TOOL_REPO>/logiclint.ps1" --recursive "path/to/dir"
 
 - 既定: ツール同梱の `.logiclint/logiclint.config.json` を使います
 - 上書き: 原稿ルートに `.logiclint/logiclint.config.json` を置くか、`--config` で明示します
+
+### provider の切り替え
+
+`provider` に `"gemini"` または `"openai"` を指定します（未指定時は `"gemini"`）。
+
+#### OpenAI / OpenAI互換の例
+
+```json
+{
+  "version": 1,
+  "output": { "dir": "logiclint-out" },
+  "provider": "openai",
+  "openai": {
+    "model": "gpt-4o-mini",
+    "api_key_file": ".logiclint/secret.json",
+    "base_url": "https://api.openai.com/v1",
+    "sleep_seconds_between_requests": 0,
+    "max_retries_per_file": 2,
+    "sleep_seconds_between_retries": 2
+  },
+  "taxonomy": [
+    "definition_consistency",
+    "quantifier_scope_drift",
+    "causal_leap_or_missing_warrant",
+    "premise_conflict",
+    "reference_ambiguity",
+    "temporal_or_stage_inconsistency",
+    "normative_descriptive_mixing"
+  ]
+}
+```
+
+`base_url` は省略可能です（省略時は `https://api.openai.com/v1`）。OpenAI互換サーバやAzure等を使う場合は、互換エンドポイントを `base_url` に指定してください。
 

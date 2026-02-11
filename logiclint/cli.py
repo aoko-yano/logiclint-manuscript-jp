@@ -20,6 +20,7 @@ from .utils import (
     write_text,
 )
 from .gemini import gemini_generate_text
+from .openai import openai_generate_text
 from .prompting import build_prompt, load_default_assets
 from .reporting import normalize_report, validate_report_shape
 
@@ -33,32 +34,47 @@ def iter_md_files(root: Path) -> list[Path]:
 
 def validate_config(
     cfg: dict[str, Any],
-) -> tuple[Path, dict[str, Any], set[str], float, int, float]:
+) -> tuple[Path, str, dict[str, Any], set[str], float, int, float]:
     """config の必須キーと型を検証し、実行に必要な値を取り出して返す。"""
     if not isinstance(cfg.get("output"), dict) or not str(cfg["output"].get("dir") or "").strip():
         raise SystemExit("ERROR: config.output.dir が必要です")
-    if not isinstance(cfg.get("gemini"), dict):
-        raise SystemExit("ERROR: config.gemini が必要です")
-    gem: dict[str, Any] = cfg["gemini"]
-    if not str(gem.get("model") or "").strip():
-        raise SystemExit("ERROR: config.gemini.model が必要です")
-    if not str(gem.get("api_key_file") or "").strip():
-        raise SystemExit("ERROR: config.gemini.api_key_file が必要です")
     if not isinstance(cfg.get("taxonomy"), list) or not cfg["taxonomy"]:
         raise SystemExit("ERROR: config.taxonomy（配列）が必要です")
 
+    provider = str(cfg.get("provider") or "gemini").strip().lower()
+    if provider not in ("gemini", "openai"):
+        raise SystemExit('ERROR: config.provider は "gemini" または "openai" を指定してください')
+
+    if provider == "gemini":
+        if not isinstance(cfg.get("gemini"), dict):
+            raise SystemExit("ERROR: config.gemini が必要です")
+        prov: dict[str, Any] = cfg["gemini"]
+        if not str(prov.get("model") or "").strip():
+            raise SystemExit("ERROR: config.gemini.model が必要です")
+        if not str(prov.get("api_key_file") or "").strip():
+            raise SystemExit("ERROR: config.gemini.api_key_file が必要です")
+    else:
+        if not isinstance(cfg.get("openai"), dict):
+            raise SystemExit("ERROR: config.openai が必要です")
+        prov = cfg["openai"]
+        if not str(prov.get("model") or "").strip():
+            raise SystemExit("ERROR: config.openai.model が必要です")
+        if not str(prov.get("api_key_file") or "").strip():
+            raise SystemExit("ERROR: config.openai.api_key_file が必要です")
+        # base_url は任意（省略時はクライアント側で既定を使う）
+
     try:
-        sleep_between = float(gem["sleep_seconds_between_requests"])
-        max_retries = int(gem["max_retries_per_file"])
-        sleep_between_retries = float(gem["sleep_seconds_between_retries"])
+        sleep_between = float(prov["sleep_seconds_between_requests"])
+        max_retries = int(prov["max_retries_per_file"])
+        sleep_between_retries = float(prov["sleep_seconds_between_retries"])
     except KeyError as e:
-        raise SystemExit(f"ERROR: config.gemini.{e.args[0]} が必要です") from e
+        raise SystemExit(f"ERROR: config.{provider}.{e.args[0]} が必要です") from e
     if sleep_between < 0 or sleep_between_retries < 0 or max_retries < 0:
         raise SystemExit("ERROR: sleep/max_retries は 0 以上で指定してください")
 
     out_dir = Path(str(cfg["output"]["dir"]))
     taxonomy = set(cfg["taxonomy"])
-    return out_dir, gem, taxonomy, sleep_between, max_retries, sleep_between_retries
+    return out_dir, provider, prov, taxonomy, sleep_between, max_retries, sleep_between_retries
 
 
 def run_one(
@@ -66,8 +82,10 @@ def run_one(
     md_path: Path,
     work_root: Path,
     out_dir: Path,
+    provider: str,
     model: str,
     api_key: str,
+    base_url: str,
     rubric: str,
     schema: dict[str, Any],
     taxonomy: set[str],
@@ -87,14 +105,17 @@ def run_one(
     prompt_path = (out_dir / f"{md_path.name}.PROMPT.md").resolve()
     write_text(prompt_path, prompt + "\n")
 
-    # Gemini API で生成（生テキスト）を取得
-    text = gemini_generate_text(model=model, prompt=prompt, api_key=api_key)
+    # LLM API で生成（生テキスト）を取得
+    if provider == "openai":
+        text = openai_generate_text(base_url=base_url, model=model, prompt=prompt, api_key=api_key)
+    else:
+        text = gemini_generate_text(model=model, prompt=prompt, api_key=api_key)
 
     # 生成テキストから JSON オブジェクト部分だけを抽出してパース
     try:
         report_obj = json.loads(extract_json_text(text))
     except Exception as e:
-        raise SystemExit(f"ERROR: Geminiの出力をJSONとして解釈できませんでした（{e}）\n---\n{text[:2000]}\n---")
+        raise SystemExit(f"ERROR: {provider} の出力をJSONとして解釈できませんでした（{e}）\n---\n{text[:2000]}\n---")
 
     # レポート形状の簡易検証（taxonomy/必須キー/型など）
     errs = validate_report_shape(report_obj, taxonomy)
@@ -106,7 +127,7 @@ def run_one(
     # 正規化（トリム・並び替え）し、メタ情報を付与
     norm = normalize_report(report_obj)
     norm.setdefault("meta", {})
-    norm["meta"]["generated_by"] = "gemini-api"
+    norm["meta"]["generated_by"] = "openai-api" if provider == "openai" else "gemini-api"
     norm["meta"]["model"] = model
     norm["meta"]["generated_at"] = _dt.datetime.now(tz=_dt.timezone.utc).isoformat()
 
@@ -122,8 +143,10 @@ def run_one_with_retries(
     md_path: Path,
     work_root: Path,
     out_dir: Path,
+    provider: str,
     model: str,
     api_key: str,
+    base_url: str,
     rubric: str,
     schema: dict[str, Any],
     taxonomy: set[str],
@@ -138,8 +161,10 @@ def run_one_with_retries(
                 md_path=md_path,
                 work_root=work_root,
                 out_dir=out_dir,
+                provider=provider,
                 model=model,
                 api_key=api_key,
+                base_url=base_url,
                 rubric=rubric,
                 schema=schema,
                 taxonomy=taxonomy,
@@ -193,7 +218,7 @@ def main(argv: list[str] | None = None) -> int:
         default="",
         help="設定ファイル（省略時: ./.logiclint/logiclint.config.json を優先し、無ければツール同梱を使用）",
     )
-    p.add_argument("--model", default="", help="Geminiモデル名（省略時: configの gemini.model）")
+    p.add_argument("--model", default="", help="モデル名（省略時: configの該当provider.model）")
     p.add_argument("--recursive", action="store_true", help="ディレクトリ配下の .md を再帰的に順番に処理する")
     p.add_argument("target", nargs="?", help="対象Markdown（ファイル or ディレクトリ）")
 
@@ -220,20 +245,27 @@ def main(argv: list[str] | None = None) -> int:
     cfg = load_config(work_root, cfg_path)
 
     # config を検証し、実行に必要な値を取り出す
-    out_dir_rel, gem, taxonomy, sleep_between, max_retries, sleep_between_retries = validate_config(cfg)
+    out_dir_rel, provider, prov_cfg, taxonomy, sleep_between, max_retries, sleep_between_retries = validate_config(cfg)
 
     # CLIの --model があれば config より優先
-    model = (args.model or str(gem["model"])).strip()
+    model = (args.model or str(prov_cfg["model"])).strip()
 
     # 出力ディレクトリは原稿ルート配下に解決する
     out_dir = work_root / out_dir_rel
 
     # APIキーを設定ファイル指定のパスから読む（原稿ルート基準）
-    key_file = str(gem["api_key_file"])
+    key_file = str(prov_cfg["api_key_file"])
     key_path = (work_root / key_file).resolve()
-    api_key = get_api_key_from_file(key_path)
+    api_key = get_api_key_from_file(
+        key_path,
+        key_name=("openai_api_key" if provider == "openai" else "gemini_api_key"),
+    )
     if not api_key:
         raise SystemExit(f"ERROR: APIキーを読み取れませんでした: {key_file} ({key_path})")
+
+    base_url = ""
+    if provider == "openai":
+        base_url = str(prov_cfg.get("base_url") or "").strip()
 
     # 同梱の rubric/schema を読み込む
     rubric, schema = load_default_assets()
@@ -258,8 +290,10 @@ def main(argv: list[str] | None = None) -> int:
                 md_path=md,
                 work_root=work_root,
                 out_dir=out_dir,
+                provider=provider,
                 model=model,
                 api_key=api_key,
+                base_url=base_url,
                 rubric=rubric,
                 schema=schema,
                 taxonomy=taxonomy,
@@ -281,8 +315,10 @@ def main(argv: list[str] | None = None) -> int:
             md_path=target_path,
             work_root=work_root,
             out_dir=out_dir,
+            provider=provider,
             model=model,
             api_key=api_key,
+            base_url=base_url,
             rubric=rubric,
             schema=schema,
             taxonomy=taxonomy,

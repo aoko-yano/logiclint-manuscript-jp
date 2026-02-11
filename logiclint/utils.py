@@ -73,8 +73,12 @@ def extract_json_text(text: str) -> str:
     return s
 
 
-def get_api_key_from_file(path: Path) -> str | None:
-    """API キーファイル（raw文字列 or JSON）から Gemini API キーを取り出す。"""
+def get_api_key_from_file(path: Path, *, key_name: str = "gemini_api_key") -> str | None:
+    """API キーファイル（raw文字列 or JSON）から API キーを取り出す。
+
+    - raw文字列: そのままキーとして扱う
+    - JSON文字列: 指定キー（例: gemini_api_key / openai_api_key）から取り出す
+    """
     try:
         raw = read_text(path).strip()
     except FileNotFoundError:
@@ -88,8 +92,13 @@ def get_api_key_from_file(path: Path) -> str | None:
     if isinstance(obj, str):
         return obj.strip() or None
     if isinstance(obj, dict):
-        v = obj.get("gemini_api_key")
+        # 指定キーを優先
+        v = obj.get(key_name)
         if isinstance(v, str) and v.strip():
             return v.strip()
+        # 互換: OpenAI系では汎用キー名 `api_key` が使われることがある
+        v2 = obj.get("api_key")
+        if isinstance(v2, str) and v2.strip():
+            return v2.strip()
     return None
 

@@ -3,9 +3,18 @@
   "output": {
     "dir": "logiclint-out"
   },
+  "provider": "openai",
   "gemini": {
     "model": "gemini-2.5-flash",
     "api_key_file": ".logiclint/secret.json",
+    "sleep_seconds_between_requests": 0,
+    "max_retries_per_file": 2,
+    "sleep_seconds_between_retries": 2
+  },
+  "openai": {
+    "model": "gpt-4o-mini",
+    "api_key_file": ".logiclint/secret.json",
+    "base_url": "https://api.openai.com/v1",
     "sleep_seconds_between_requests": 0,
     "max_retries_per_file": 2,
     "sleep_seconds_between_retries": 2
