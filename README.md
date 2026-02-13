@@ -94,3 +94,9 @@ pwsh "<TOOL_REPO>/logiclint.ps1" --recursive "path/to/dir"
 
 `base_url` は省略可能です（省略時は `https://api.openai.com/v1`）。OpenAI互換サーバやAzure等を使う場合は、互換エンドポイントを `base_url` に指定してください。
 
+---
+
+## License
+
+MIT License. See [LICENSE](LICENSE) for details.
+
