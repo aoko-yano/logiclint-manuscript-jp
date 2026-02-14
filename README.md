@@ -1,6 +1,6 @@
 ## logiclint（文章の内部論理Lint）
 
-LLM（Gemini API）に「内部整合性の観点」を固定して当て、**JSON（固定スキーマ）**で指摘を返させ、原稿の編集に使うためのツールです。
+LLM（Gemini API / OpenAI API）に「内部整合性の観点」を固定して当て、**JSON（固定スキーマ）**で指摘を返させ、原稿の編集に使うためのツールです。
 
 現在は **Gemini / OpenAI（互換API含む）** のどちらでも実行できます。利用するプロバイダは `.logiclint/logiclint.config.json` の `provider` で切り替えます（未指定時はGemini）。
 
